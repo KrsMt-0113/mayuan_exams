@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>题目检索系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .search-box {
+            background: white;
+            border-radius: 50px;
+            padding: 15px 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-box input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 1.1em;
+            padding: 5px;
+        }
+
+        .search-box input::placeholder {
+            color: #999;
+        }
+
+        .search-icon {
+            color: #667eea;
+            font-size: 1.5em;
+            margin-right: 10px;
+        }
+
+        .stats {
+            color: #666;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+
+        .results {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-height: calc(100vh - 250px);
+            overflow-y: auto;
+        }
+
+        .question-item {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            transition: background 0.2s;
+        }
+
+        .question-item:last-child {
+            border-bottom: none;
+        }
+
+        .question-item:hover {
+            background: #f8f9fa;
+        }
+
+        .question-content {
+            font-size: 1em;
+            line-height: 1.8;
+            color: #333;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .question-source {
+            margin-top: 10px;
+            padding: 5px 12px;
+            background: #667eea;
+            color: white;
+            border-radius: 20px;
+            font-size: 0.85em;
+            display: inline-block;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 1.1em;
+        }
+
+        .highlight {
+            background-color: #ffeb3b;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 马原题目检索系统</h1>
+        </div>
+
+        <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input 
+                type="text" 
+                id="searchInput" 
+                placeholder="输入关键词搜索题目..." 
+                autocomplete="off"
+            >
+        </div>
+
+        <div class="stats" id="stats">
+            加载中...
+        </div>
+
+        <div class="results" id="results">
+            <div class="loading">正在加载题目数据...</div>
+        </div>
+    </div>
+
+    <script>
+        let allQuestions = [];
+        
+        // 加载题目数据
+        async function loadQuestions() {
+            try {
+                const response = await fetch('questions.json');
+                const data = await response.json();
+                allQuestions = data.questions || [];
+                updateStats(allQuestions.length, allQuestions.length);
+                displayQuestions(allQuestions);
+            } catch (error) {
+                document.getElementById('results').innerHTML = 
+                    '<div class="no-results">加载题目失败，请确保 questions.json 文件存在</div>';
+                console.error('加载失败:', error);
+            }
+        }
+
+        // 更新统计信息
+        function updateStats(showing, total) {
+            document.getElementById('stats').textContent = 
+                `显示 ${showing} / 共 ${total} 个题目`;
+        }
+
+        // 高亮关键词
+        function highlightKeyword(text, keyword) {
+            if (!keyword) return text;
+            const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return text.replace(regex, '<span class="highlight">$1</span>');
+        }
+
+        // 搜索题目
+        function searchQuestions(keyword) {
+            if (!keyword.trim()) {
+                displayQuestions(allQuestions);
+                updateStats(allQuestions.length, allQuestions.length);
+                return;
+            }
+
+            const filtered = allQuestions.filter(q => 
+                q.question.toLowerCase().includes(keyword.toLowerCase())
+            );
+
+            displayQuestions(filtered, keyword);
+            updateStats(filtered.length, allQuestions.length);
+        }
+
+        // 显示题目列表
+        function displayQuestions(questions, keyword = '') {
+            const resultsDiv = document.getElementById('results');
+            
+            if (questions.length === 0) {
+                resultsDiv.innerHTML = '<div class="no-results">😕 没有找到匹配的题目</div>';
+                return;
+            }
+
+            const html = questions.map(q => `
+                <div class="question-item">
+                    <div class="question-content">${highlightKeyword(q.question, keyword)}</div>
+                    <span class="question-source">来源: ${q.source}</span>
+                </div>
+            `).join('');
+
+            resultsDiv.innerHTML = html;
+        }
+
+        // 监听输入事件
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            searchQuestions(e.target.value);
+        });
+
+        // 页面加载时加载数据
+        loadQuestions();
+    </script>
+</body>
+</html>
